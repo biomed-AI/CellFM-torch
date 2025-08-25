@@ -6,12 +6,6 @@ from layers.torch_finetune import FinetuneModel
 from layers.utils import *
 import torch.nn.functional as F
 
-cfg2 = Config_80M()
-cfg2.ecs_threshold = 0.8
-cfg2.ecs = True
-cfg2.add_zero = True
-cfg2.pad_zero = True
-mask_ratio = 0.5
 
 class Cell_FM(nn.Module):
     def __init__(self, n_gene, cfg, ckpt_path=None, device=None):
@@ -62,7 +56,7 @@ class Cell_FM(nn.Module):
                 moment_state_dict_2[param_name] = pt_tensor
             elif pt_key in ['global_step', 'learning_rate', 'beta1_power', 'beta2_power',
                             'current_iterator_step', 'last_overflow_iterator_step']:
-                continue  # 忽略这些非参数项
+                continue  
             else:
                 torch_state_dict[pt_key] = pt_tensor
         missing_keys, unexpected_keys = self.net.load_state_dict(torch_state_dict, strict=False)
@@ -86,7 +80,6 @@ class Cell_FM(nn.Module):
         optimizer = optim.Adam(self.params, lr=lr, weight_decay=weight_decay)
         scaler = torch.cuda.amp.GradScaler(init_scale=1.0)
         if moment:
-            # 只为有moment的参数赋值
             param_name_map = {name: param for name, param in self.net.named_parameters()}
             for name, param in param_name_map.items():
                 if name in self.moment_state_dict_1 and name in self.moment_state_dict_2:
@@ -98,18 +91,16 @@ class Cell_FM(nn.Module):
                     optimizer.state[param]['step'] = step
         self.optimizer = optimizer
         self.scaler = scaler
-        # # 恢复meta信息
-        # if self.meta_info is not None:
-        #     self.restore_meta_to_torch(self.meta_info, self.optimizer)
+
 
     @staticmethod
     def restore_meta_to_torch(meta_info, optimizer):
         if 'global_step' in meta_info:
             step_tensor = torch.tensor(meta_info['global_step'], dtype=torch.float32, device='cpu')
-            # 恢复学习率
+            # restore lr
             for group in optimizer.param_groups:
                 group['lr'] = meta_info.get('learning_rate', group['lr'])
-            # 恢复step
+            # restore step
             for param in optimizer.state:
                 optimizer.state[param]['step'] = step_tensor
 
@@ -133,14 +124,13 @@ class Cell_FM(nn.Module):
         return loss, cls_token
     
 class Finetune_Cell_FM(nn.Module):
-    def __init__(self, cfg, cfg2=cfg2):
+    def __init__(self, cfg):
         super(Finetune_Cell_FM, self).__init__()
         self.cfg = cfg
-        self.cfg2 = cfg2
         self.num_cls = cfg.num_cls
-        self.extractor = Cell_FM(27855, self.cfg2, ckpt_path=self.cfg.ckpt_path, device=self.cfg.device) # n_gene, cfg=config_80M()
+        self.extractor = Cell_FM(27855, self.cfg, ckpt_path=self.cfg.ckpt_path, device=self.cfg.device) # n_gene, cfg=config_80M()
         self.cls = nn.Sequential(
-            nn.Linear(self.cfg2.enc_dims, 128),
+            nn.Linear(self.cfg.enc_dims, 128),
             nn.BatchNorm1d(128),
             nn.LeakyReLU(),
             nn.Linear(128, self.num_cls)

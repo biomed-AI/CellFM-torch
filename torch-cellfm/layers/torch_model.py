@@ -98,11 +98,11 @@ class ValueDecoder_1(nn.Module):
     def forward(self, expr_emb):
         b, l, d = expr_emb.shape
         # pred = self.w2(self.act(self.w1(expr_emb))).view(b, l)
-        x = self.norm(expr_emb)               # LayerNorm 归一化
+        x = self.norm(expr_emb)               # LayerNorm 
         x = self.w1(x)                        # Linear
-        x = self.act(x)                       # ReLU 激活
+        x = self.act(x)                       # ReLU 
         x = self.dropout(x)
-        pred = self.w2(x).view(b, l)          # 输出
+        pred = self.w2(x).view(b, l)          # output
 
         if not self.zero:
             return pred

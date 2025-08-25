@@ -21,29 +21,24 @@ from model import Finetune_Cell_FM
 
 
 def basic():
-    cfg2 = Config_80M()
-    cfg2.ecs_threshold = 0.8
-    cfg2.ecs = True
-    cfg2.add_zero = True
-    cfg2.pad_zero = True
-    cfg2.use_bs = 16
-    cfg2.mask_ratio = 0.5
+    ### CellFM param ###
+    cfg = Config_80M()
+    cfg.ecs_threshold = 0.8
+    cfg.ecs = True
+    cfg.add_zero = True
+    cfg.pad_zero = True
+    cfg.use_bs = 16
+    cfg.mask_ratio = 0.5
+    ### Main param ###
+    cfg.dataset = "Pancrm0"
+    cfg.feature_col = "cell_type"
+    cfg.ckpt_path = "/bigdat2/user/shanggny/checkpoint/para80m/6300w_18000_19479-1_38071.ckpt"
+    cfg.device = "cuda:2"
+    cfg.epoch = 5
+    cfg.num_cls = 1
     
-    class config_pt:
-        dataset = "Pancrm4"
-        feature_col = "cell_type" 
-        sample_batch_size = 4 # each batch contain 2 sample
-        cell_batch_size = 8 # each porcess contain 8 cells -> to LLM
-        construct_data = True
-        att_hidden = 1536 # process to attention pooling
-        gene_hidden = 2048
-        gene_ls = None
-        device = "cuda:7"
-        epoch = 5
-        ckpt_path = "/bigdat2/user/shanggny/checkpoint/para80m/6300w_18000_19479-1_38071.ckpt"
-        num_cls = 1
     
-    cfg = config_pt()
+    
     #### A lots of Path ####
     PT_PATH = f"../data_pt/{cfg.dataset}"
     MODEL_PATH = f"../model_checkpoint/{cfg.dataset}" # for 40000 cells
@@ -52,7 +47,7 @@ def basic():
     os.makedirs(PT_PATH, exist_ok=True)
     os.makedirs(MODEL_PATH, exist_ok=True)
     
-    def load_data(adata_path):
+    def load_data(adata_path, mode="train"):
         adata = read_h5ad(adata_path)
         # adata.var_names = adata.var['gene_name']
         adata.obs['celltype'] = adata.obs['cell_type']
@@ -60,25 +55,36 @@ def basic():
         cfg.num_cls = len(adata.obs['feat'].unique())
         
         adata.obs['batch_id'] = 0
-        adata.obs['train'] = 0
-
-        dataset = SCrna(adata, mode="train")
-        prep = Prepare(cfg2.nonz_len, pad=0, mask_ratio=cfg2.mask_ratio)
-        loader = build_dataset(
-            dataset,
-            prep=prep,
-            batch_size=cfg2.use_bs,
-            pad_zero=cfg2.pad_zero,
-            drop=True,
-            shuffle=True
-        )
+        if mode == "train":
+            adata.obs['train'] = 0
+            dataset = SCrna(adata, mode="train")
+            prep = Prepare(cfg.nonz_len, pad=0, mask_ratio=cfg.mask_ratio)
+            loader = build_dataset(
+                dataset,
+                prep=prep,
+                batch_size=cfg.use_bs,
+                pad_zero=cfg.pad_zero,
+                drop=True,
+                shuffle=True
+            )
+        if mode== "test":
+            adata.obs['train'] = 2
+            dataset = SCrna(adata, mode="test")
+            prep = Prepare(cfg.nonz_len, pad=0, mask_ratio=cfg.mask_ratio)
+            loader = build_dataset(
+                dataset,
+                prep=prep,
+                batch_size=cfg.use_bs,
+                drop=True,
+                shuffle=True
+            )
         return loader
     ################### training ###################
     train_adata_path = f"/data/user/liwb/project/CellFM/datasets/cell_annotion/Inter/{cfg.dataset}/train.h5ad"
     test_adata_path = f"/data/user/liwb/project/CellFM/datasets/cell_annotion/Inter/{cfg.dataset}/test.h5ad"
     
-    train_loader = load_data(train_adata_path)
-    test_loader = load_data(test_adata_path)
+    train_loader = load_data(train_adata_path, mode="train")
+    test_loader = load_data(test_adata_path, mode="test")
     
 
     net = Finetune_Cell_FM(cfg) # 27855
@@ -111,7 +117,6 @@ def basic():
         
         for step, batch in enumerate(progress):    
             
-            # === 数据输入 ===
             raw_nzdata = batch['raw_nzdata'].to(cfg.device)
             dw_nzdata = batch['dw_nzdata'].to(cfg.device)
             ST_feat = batch['ST_feat'].to(cfg.device)
@@ -122,9 +127,7 @@ def basic():
             batch_id = batch['batch_id'].to(cfg.device)
             feat = batch['feat'].long().to(cfg.device)
 
-            # === 清空梯度 ===
             optimizer.zero_grad()
-            # === 前向 + 反向（AMP混合精度） ===
             with torch.cuda.amp.autocast():
                 cls, mask_loss, cls_token = net(
                     raw_nzdata=raw_nzdata,
@@ -164,7 +167,7 @@ def basic():
         running_acc = 0.0
     
         progress = tqdm(test_loader, desc="Testing")
-        with torch.no_grad():  # 测试阶段不需要计算梯度
+        with torch.no_grad(): 
             for step, batch in enumerate(progress):    
                 
                 raw_nzdata = batch['raw_nzdata'].to(cfg.device)
@@ -177,7 +180,6 @@ def basic():
                 batch_id = batch['batch_id'].to(cfg.device)
                 feat = batch['feat'].long().to(cfg.device)
 
-                # 测试阶段不需要清空梯度和反向传播
                 with torch.cuda.amp.autocast():
                     cls, mask_loss, cls_token = net(
                         raw_nzdata=raw_nzdata,
@@ -203,7 +205,7 @@ def basic():
                 
                 progress.set_postfix(loss=avg_loss, acc=avg_acc)
         
-        print(f"Testing {epoch+1} 完成,平均loss: {avg_loss:.6f}, 平均准确率: {avg_acc:.6f}")
+        print(f"Testing {epoch+1} complete,avg loss: {avg_loss:.6f}, avg acc: {avg_acc:.6f}")
     
 if __name__ == "__main__":
     basic()

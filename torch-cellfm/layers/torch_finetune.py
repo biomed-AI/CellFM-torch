@@ -14,7 +14,6 @@ import numpy as np
 # These should exactly replicate your MindSpore definitions
 from .torch_model import ValueEncoder, ValueDecoder, CellwiseDecoder, FFN
 from .torch_retention import RetentionLayer, SRMSNorm
-# from torch_retention import RetentionLayer, SRMSNorm
 class MaskedMSE(nn.Module):
     def __init__(self, tag=None):
         super().__init__()
@@ -45,7 +44,6 @@ class BCELoss(nn.Module):
         log_pred = torch.log(torch.clamp(pred_cat, min=self.eps, max=1.0))
         logit = -torch.sum(log_pred * target_cat, dim=-1)
         
-        # # 修复：使用与MS版本一致的实现
         # pred = torch.log(torch.clamp(pred, min=self.eps, max=1.0))
         # target_cat = torch.cat([1 - target, target], dim=-1)
         # logit = -torch.sum(pred * target_cat, dim=-1)
@@ -98,7 +96,7 @@ class FinetuneModel(nn.Module):
     @torch.no_grad()
     def embedding_infer(self, expr, gene, ST_feat, zero_idx):
         b, l = gene.shape
-        gene_emb = self.gene_emb[gene] # gene emb 是 27856个基因的编码，所以位置一定要与基因名字对应上，且位置也要正确才好！gene则是 b*l的，表示对应位置上的基因。
+        gene_emb = self.gene_emb[gene] 
         expr_emb, unmask = self.value_enc(expr)
         len_scale = torch.rsqrt(zero_idx.sum(dim=-1, keepdim=True).float() - 3 + 1e-6)
         len_scale = len_scale.view(b, 1, 1, 1).detach()
@@ -154,7 +152,7 @@ class FinetuneModel(nn.Module):
 
     def encode(self, expr, gene, ST_feat, zero_idx):
         b, l = gene.shape
-        gene_emb = self.gene_emb[gene] # gene emb 是 27856个基因的编码，所以位置一定要与基因名字对应上，且位置也要正确才好！gene则是 b*l的，表示对应位置上的基因。
+        gene_emb = self.gene_emb[gene] 
         expr_emb, unmask = self.value_enc(expr)
         # len_scale = torch.rsqrt(zero_idx.sum(-1).float() - 3 + 1e-6).view(b, 1, 1, 1).detach()
         len_scale = torch.rsqrt(zero_idx.sum(dim=-1, keepdim=True).float() - 3 + 1e-6)
@@ -210,7 +208,7 @@ class FinetuneModel(nn.Module):
         # print(use_mask.sum(dim=1), mask_gene.sum(dim=1))
         # loss1 = self.reconstruct1(gw_pred, raw_nzdata, mask_gene*zero_idx)
         # loss2 = self.reconstruct2(cw_pred, raw_nzdata, mask_gene*zero_idx)
-        # 修复：使用与MS版本一致的mask处理
+
         mask = mask_gene
         loss1 = self.reconstruct1(gw_pred, raw_nzdata, mask)
         loss2 = self.reconstruct2(cw_pred, raw_nzdata, mask)
@@ -318,25 +316,25 @@ if __name__ == '__main__':
     print(f"Missing keys in PyTorch model: {missing_keys}")
     print(f"Unexpected keys in checkpoint: {unexpected_keys}")
 
-    # === 初始化 optimizer & 将 moment1/2 加载为 optimizer.state ===
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     net = net.to(device)
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-4, weight_decay=1e-5)
     scaler = torch.cuda.amp.GradScaler(
-        init_scale=1.0,  # 初始 loss scale
+        init_scale=1.0,  
     )
 
     # =========================================================================
-    # 构建 param_name → param tensor 映射
+    # Build param_name → param tensor mapping
     param_name_map = {name: param for name, param in net.named_parameters()}
-    # 构建 PyTorch optimizer state（注意 param 为 key）
+    # Build PyTorch optimizer state (note: param is used as the key)
     moment_states = {}
     for name, param in param_name_map.items():
         if name in moment_state_dict_1 and name in moment_state_dict_2:
-            # 强制设备和dtype匹配 param
+            # Force device and dtype to match param
             exp_avg = moment_state_dict_1[name].clone().to(param.device).to(param.dtype)
             exp_avg_sq = moment_state_dict_2[name].clone().to(param.device).to(param.dtype)
-            step = torch.tensor(0, dtype=torch.float32, device='cpu')  # 建议保留在 CPU
+            step = torch.tensor(0, dtype=torch.float32, device='cpu')  # Recommended to keep on CPU
             moment_states[param] = {
                 'exp_avg': exp_avg,
                 'exp_avg_sq': exp_avg_sq,
@@ -349,15 +347,15 @@ if __name__ == '__main__':
                 'current_iterator_step', 'last_overflow_iterator_step']:
         if key in ms_ckpt:
             val = ms_ckpt[key].asnumpy()
-            if val.shape == ():  # 标量
+            if val.shape == ():  # Scalar
                 val = val.item()
             meta_info[key] = val
     def restore_meta_to_torch(meta_info, optimizer):
         step_tensor = torch.tensor(meta_info['global_step'], dtype=torch.float32, device='cpu')
-        # 恢复学习率
+        # Restore learning rate
         for group in optimizer.param_groups:
             group['lr'] = meta_info.get('learning_rate', group['lr'])
-        # 恢复 step
+        # Restore step
         for param in optimizer.state:
             optimizer.state[param]['step'] = step_tensor
 

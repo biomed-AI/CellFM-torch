@@ -9,7 +9,6 @@ import torch
 from torch import nn, optim
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.data import DataLoader
 class Config_80M:
     def __init__(self):
         self.start_lr = 1e-3
@@ -82,7 +81,7 @@ def map_gene_list(gene_list, gene_info):
         failed_genes: list[str]，无法映射到 geneset 的原始名称
     """
     geneset = {j: i + 1 for i, j in enumerate(gene_info.index)}
-    gene_list = list(map(str, gene_list))  # 确保字符串类型
+    gene_list = list(map(str, gene_list))  
     genemap = {j: i + 1 for i, j in enumerate(gene_info.index)}
     hgcn = pd.read_csv(r'csv/updated_hgcn.tsv', index_col=1, header=0,
                        sep='\t')
@@ -131,13 +130,12 @@ class SCrna():
 
         selected_genes_list = adata.var_names.tolist()
         selected_genes, _ = map_gene_list(selected_genes_list, self.gene_info)
-        selected_genes = selected_genes[:2048]  # 截断至2048
+        selected_genes = selected_genes[:2048]  # 2048
         pad_len = 2048 - len(selected_genes)
         pad_genes = [f'__pad_{i}__' for i in range(pad_len)]
         self.full_gene_list = selected_genes + pad_genes
         self.selected_gene_len = len(selected_genes)
 
-        # 构建补零后的表达矩阵
         used_genes = [g for g in selected_genes if g in adata.var_names]
         pad_num = 2048 - len(used_genes)
         # print(f"[Info] Selected: {len(selected_genes)}, Found: {len(used_genes)}, Padding: {pad_num}")
@@ -196,8 +194,8 @@ class SCrna():
         data = np.asarray(self.data[idx], dtype=np.float32)
         T = np.asarray(self.T[idx], dtype=np.float32)
         gene = np.asarray(self.gene, dtype=np.int32)
-        celltype_label = self.celltypes_labels[idx]  # 单个cell的label
-        batch_id = self.batch_ids[idx] # 单个cell的batch id
+        celltype_label = self.celltypes_labels[idx]  # single cell label
+        batch_id = self.batch_ids[idx] # single cell batch id
         feat = self.feat[idx]
         return data, gene, T, celltype_label, batch_id, feat
 
@@ -220,14 +218,14 @@ class TestSCrna():
 
         selected_genes_list = selected_genes_list = adata.var_names.tolist()
         selected_genes, _ = map_gene_list(selected_genes_list, self.gene_info)
-        selected_genes = selected_genes[:2048]  # 截断至2048
+        selected_genes = selected_genes[:2048]  # 2048
         pad_len = 2048 - len(selected_genes)
         pad_genes = [f'__pad_{i}__' for i in range(pad_len)]
         self.full_gene_list = selected_genes + pad_genes
-        # 构建补零后的表达矩阵
+        # padding zero matrix
         used_genes = [g for g in selected_genes if g in adata.var_names]
         pad_num = 2048 - len(used_genes)
-        # print(f"[Info] Selected: {len(selected_genes)}, Found: {len(used_genes)}, Padding: {pad_num}")
+        print(f"[Info] Selected: {len(selected_genes)}, Found: {len(used_genes)}, Padding: {pad_num}")
 
         X = adata[:, used_genes].X.toarray().astype(np.int32)
 
@@ -253,7 +251,7 @@ class TestSCrna():
             self.data = self.adata.X.astype(np.int32)
 
         self.label = self.data.copy()  # shape [N, G]
-        # padding 到 [N, 2048]
+        # padding to [N, 2048]
         N, G = self.label.shape
         self.label_padded = np.zeros((N, 2048), dtype=np.float32)
         self.label_padded[:, :G] = self.label
@@ -261,12 +259,12 @@ class TestSCrna():
         self.mask_rate = mask_rate
         self.mask = np.zeros((N, G), dtype=bool)
 
-        # 每个样本随机打乱 G 个位置
+        # Randomly shuffle G positions for each sample
         rand_idx = np.argsort(np.random.rand(N, G), axis=1)
-        # 对每行选择前 mask_len 个位置设为 True
+        # For each row, set the first mask_len positions to True
         mask_len = int(G * self.mask_rate)
         self.mask[np.arange(N)[:, None], rand_idx[:, :mask_len]] = True
-        # 构造 masked_X
+        # Construct masked_X
         self.masked_X = self.adata.copy()
         self.masked_X[self.mask] = 0.0
         self.mask_padded = np.zeros((N, 2048), dtype=bool)
@@ -276,9 +274,9 @@ class TestSCrna():
         return len(self.masked_X)
 
     def __getitem__(self, idx):
-        x = self.masked_X[idx].reshape(-1).astype(np.float32)  # masked 输入
+        x = self.masked_X[idx].reshape(-1).astype(np.float32)  # masked input
         y = self.label_padded[idx].reshape(-1).astype(np.float32)  # ground truth
-        m = self.mask_padded[idx].reshape(-1).astype(bool)  # mask 区域
+        m = self.mask_padded[idx].reshape(-1).astype(bool)  # mask area
         g = self.gene
         return x, g, y, m
 
@@ -303,7 +301,10 @@ class Prepare():
         self.empty_gene = np.zeros(self.n_genes + 1, np.float32)
 
     def bayes(self, raw_nzdata, T):
-        """对原始非零表达数据进行贝叶斯采样模拟加权降采样"""
+        """
+        Perform Bayesian sampling on raw non-zero expression data
+        to simulate weighted down-sampling
+        """
         S = T.copy()
         dw_nzdata = raw_nzdata.copy()
         gamma = self.bern(n=1)
@@ -321,7 +322,10 @@ class Prepare():
         return data, read
 
     def zero_idx(self, data):
-        """构造 pad 后的 zero mask, 用于指示哪些位置是零填充"""
+        """
+        Construct zero mask after padding, used to
+        indicate positions of zero padding
+        """
         seq_len = len(data)
         one = (data != 0).astype(np.float32)
         zero = np.zeros(self.pad_len - seq_len, np.float32)
@@ -329,7 +333,7 @@ class Prepare():
         return data, zero_mask
 
     def zero_mask(self, seq_len):
-        """构造 zero pad 位置对应的 mask 向量"""
+        """Construct mask vector corresponding to zero padding positions"""
         zero_len = self.pad_len - seq_len
         unmasked = np.ones(zero_len, np.float32)
         pad = np.zeros(zero_len, np.float32)
@@ -346,7 +350,7 @@ class Prepare():
         return pad, zero_mask
 
     def mask(self, dw_nzdata):
-        """对非零表达数据进行掩码操作"""
+        """Apply masking on non-zero expression data"""
         seq_len = len(dw_nzdata)
         l = int(self.mask_ratio * seq_len)
         mask = np.arange(seq_len)
@@ -372,7 +376,7 @@ class Prepare():
         return data
 
     def seperate(self, raw_data):
-        """分离非零表达和零表达位置"""
+        """Separate non-zero and zero expression positions"""
         nonz = raw_data.nonzero()[0]
         zero = np.where(raw_data == 0)[0]
         return raw_data, nonz, zero
@@ -381,7 +385,7 @@ class Prepare():
         return data, data[idx], idx
 
     def sample(self, data, nonz, zero, freq=None):
-        """抽样 nonz 和 zero 构造输入与 mask 候选"""
+        """Sample nonz and zero to construct input and mask candidates"""
         cutted = np.array([])
         if len(nonz) > self.cut:
             w = np.log1p(data[nonz])
@@ -430,24 +434,20 @@ def build_dataset(dataset, prep, batch_size, pad_zero=True, drop=True, shuffle=T
         feat_batch = []
 
         for data, gene, T, celltype_label, batch_id, feat in samples:
-            # 1. 非零/零位置划分
+
             raw_data, nonz, zero = prep.seperate(data)
 
-            # 2. 抽样 + 获取序列长度
             data, nonz, cuted, z_sample, seq_len = prep.sample(raw_data, nonz, zero)
 
-            # 3. 非零压缩
             raw_data, raw_nzdata, nonz = prep.compress(raw_data, nonz)
             gene, nonz_gene, _ = prep.compress(gene, nonz)
 
-            # 4. 采样 + 归一化
             raw_nzdata, dw_nzdata, S, T = prep.bayes(raw_nzdata, T)
             dw_nzdata, S = prep.normalize(dw_nzdata, S)
             raw_nzdata, T = prep.normalize(raw_nzdata, T)
             ST_feat = prep.cat_st(S, T)
 
             if pad_zero:
-                # 5a. 掩码和填充（pad_zero = True）
                 zero_idx = prep.attn_mask(seq_len)
                 dw_nzdata, mask_gene = prep.mask(dw_nzdata)
 
@@ -456,18 +456,16 @@ def build_dataset(dataset, prep, batch_size, pad_zero=True, drop=True, shuffle=T
                 nonz_gene = prep.pad_zero(nonz_gene)
                 mask_gene = prep.pad_zero(mask_gene)
             else:
-                # 5b. 掩码和填充（pad_zero = False）
                 dw_nzdata, zero_idx = prep.zero_idx(dw_nzdata)
                 dw_nzdata, mask_gene = prep.mask(dw_nzdata)
                 zero_pad, zero_mask = prep.zero_mask(seq_len)
 
-                gene, z_gene, z_sample = prep.compress(gene, z_sample)  # 注意此处与 MindSpore 完全对齐
+                gene, z_gene, z_sample = prep.compress(gene, z_sample) 
                 nonz_gene = prep.pad_gene(nonz_gene, z_gene)
                 raw_nzdata = prep.pad_zero(raw_nzdata)
                 dw_nzdata = prep.pad_gene(dw_nzdata, zero_pad)
                 mask_gene = prep.pad_gene(mask_gene, zero_mask)
 
-            # 6. 汇总 batch
             raw_nzdata_batch.append(torch.tensor(raw_nzdata, dtype=torch.float32))
             dw_nzdata_batch.append(torch.tensor(dw_nzdata, dtype=torch.float32))
             ST_feat_batch.append(torch.tensor(ST_feat, dtype=torch.float32))
@@ -507,19 +505,19 @@ def build_testdataset(dataset, prep, batch_size, drop=True, shuffle=True):
         mask_batch = []
 
         for data, gene, label, msk in samples:
-            # 1. 非零/零位置划分
+            
             raw_data, nonz, zero = prep.seperate(data)
-            # 2. 抽样 + 获取序列长度
+
             data, nonz, cuted, z_sample, seq_len = prep.sample(raw_data, nonz, zero)
-            # 3. 非零压缩
+
             data, dw_nzdata, nonz = prep.compress(data, nonz)
             gene, nonz_gene, _ = prep.compress(gene, nonz)
-            # 4. 掩码构建
+
             zero_idx = prep.attn_mask(seq_len)
-            # 5. padding（统一维度）
+
             dw_nzdata = prep.pad_zero(dw_nzdata)
             nonz_gene = prep.pad_zero(nonz_gene)
-            # 6. batch 累积
+
             dw_nzdata_batch.append(torch.tensor(dw_nzdata, dtype=torch.float32))
             nonz_gene_batch.append(torch.tensor(nonz_gene, dtype=torch.int32))
             zero_idx_batch.append(torch.tensor(zero_idx, dtype=torch.float32))
