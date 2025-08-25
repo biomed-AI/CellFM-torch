@@ -20,24 +20,22 @@ warnings.filterwarnings("ignore")
 from model import Finetune_Cell_FM
 
 
-def basic():
+def basic(args):
     ### CellFM param ###
     cfg = Config_80M()
     cfg.ecs_threshold = 0.8
     cfg.ecs = True
     cfg.add_zero = True
     cfg.pad_zero = True
-    cfg.use_bs = 16
+    cfg.use_bs = args.batch_size
     cfg.mask_ratio = 0.5
     ### Main param ###
-    cfg.dataset = "Pancrm0"
-    cfg.feature_col = "cell_type"
-    cfg.ckpt_path = "/bigdat2/user/shanggny/checkpoint/para80m/6300w_18000_19479-1_38071.ckpt"
-    cfg.device = "cuda:2"
-    cfg.epoch = 5
+    cfg.dataset = args.dataset
+    cfg.feature_col = args.feature_col
+    cfg.ckpt_path = args.ckpt_path
+    cfg.device = args.device
+    cfg.epoch = args.epoch 
     cfg.num_cls = 1
-    
-    
     
     #### A lots of Path ####
     PT_PATH = f"../data_pt/{cfg.dataset}"
@@ -208,4 +206,13 @@ def basic():
         print(f"Testing {epoch+1} complete,avg loss: {avg_loss:.6f}, avg acc: {avg_acc:.6f}")
     
 if __name__ == "__main__":
-    basic()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, default="Pancrm0")
+    parser.add_argument("--feature_col", type=str, default="cell_type")
+    parser.add_argument("--ckpt_path", type=str, default="/bigdat2/user/shanggny/checkpoint/para80m/6300w_18000_19479-1_38071.ckpt")
+    parser.add_argument("--device", type=str, default='cuda:2')
+    parser.add_argument("--epoch", type=int, default=5)
+    parser.add_argument("--batch_size", type=int, default=16)
+    args = parser.parse_args()
+    
+    basic(args)
