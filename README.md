@@ -1,10 +1,10 @@
-# CellFM-torch
+# torch-cellfm
 
 This project is a PyTorch reimplementation and migration of the original CellFM model, supporting loading of the original 80M MindSpore pre-trained weights for downstream tasks.
 
 ## Project Overview
 
- `CellFM-torch` provides a faithful PyTorch version of CellFM, making it easier for the community to train and deploy the model using the mainstream PyTorch framework.
+ `torch-cellfm` provides a faithful PyTorch version of CellFM, making it easier for the community to train and deploy the model using the mainstream PyTorch framework.
 
 **Key Features:**
 
@@ -50,3 +50,9 @@ checkpoint/para80m/6300w_18000_19479-1_38071.ckpt" --feature_col cell_type
 - epoch: Number of full passes over the training dataset.
 - ckpt_path: Path to a pre-train model weights (mindspore weight).
 - feature_col: Column name in adata.obs used as target/label (e.g., cell_type, batch). Determines the supervised task target.
+
+## Tutorials
+We provide tutorials for CellFM applications. Checkpoints of our model are stored in huggingface ([Model Card](https://huggingface.co/ShangguanNingyuan/CellFM) and [Pre-trained Model](https://huggingface.co/ShangguanNingyuan/CellFM/tree/main)).
+
+### Tutorial 1: Cell Annotation
+[CellAnnotation](tutorial/cls_task.ipynb)
