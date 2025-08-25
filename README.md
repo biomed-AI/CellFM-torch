@@ -1,10 +1,10 @@
-# torch-cellfm
+# CellFM-torch
 
 This project is a PyTorch reimplementation and migration of the original CellFM model, supporting loading of the original 80M MindSpore pre-trained weights for downstream tasks.
 
 ## Project Overview
 
- `torch-cellfm` provides a faithful PyTorch version of CellFM, making it easier for the community to train and deploy the model using the mainstream PyTorch framework.
+ `CellFM-torch` provides a faithful PyTorch version of CellFM, making it easier for the community to train and deploy the model using the mainstream PyTorch framework.
 
 **Key Features:**
 
