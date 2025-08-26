@@ -1,5 +1,5 @@
 # CellFM-torch
-We have released a PyTorch version of CellFM-torch, which is fully compatible with the original 80M MindSpore pre-trained weights. Although we haven’t conducted a systematic benchmark yet, we warmly welcome you to try it out. If you encounter any issues, feel free to share feedback or start a discussion with us.
+We have released a PyTorch version of CellFM, which is fully compatible with the original 80M MindSpore pre-trained weights. Although we haven’t conducted a systematic benchmark yet, we warmly welcome you to try it out. If you encounter any issues, feel free to share feedback or start a discussion with us.
 
 ## Project Overview
 
